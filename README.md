@@ -5,8 +5,16 @@ downloads server JARs and builds JARs from Git repositories.
 
 ## Build
 
-Run `go build ./src/cmd/mcpkg` from the repository root with Go 1.23 or newer. The binary
-is `./mcpkg` on Linux or macOS and `.\mcpkg.exe` on Windows.
+Build the release binary with `cargo build --release --locked`. The executable is
+`target/release/mcpkg` on Linux and macOS, or `target/release/mcpkg.exe` on Windows.
+Run `cargo test --locked` to exercise the CLI lifecycle.
+
+## Initialize a server
+
+Run `mcpkg init` in the intended server directory. It creates `plugins/`,
+`sources.d/` and `mcpkg.yml`. Repeating the command fills missing directories
+and preserves existing configuration and plugins. To choose a version at creation
+time, run `mcpkg --minecraft 1.21.11 init`. The server JAR is a separate download.
 
 ## Manage plugins
 

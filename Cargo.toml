@@ -1,0 +1,22 @@
+[package]
+name = "mcpkg"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+flate2 = "1.1.11"
+glob = "0.3"
+rawzip = "0.5.2"
+rayon = "1"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+tempfile = "3"
+
+[dev-dependencies]
+zip = { version = "4", default-features = false, features = ["deflate"] }
