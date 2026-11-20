@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"archive/zip"
@@ -28,6 +28,7 @@ func inspectJAR(filename string) (pluginMetadata, error) {
 	}
 	defer jar.Close()
 
+	// Paper reads its own descriptor when a JAR also contains a Bukkit descriptor.
 	for _, descriptor := range []string{"paper-plugin.yml", "plugin.yml"} {
 		for _, file := range jar.File {
 			if file.Name != descriptor {
@@ -52,7 +53,7 @@ func inspectJAR(filename string) (pluginMetadata, error) {
 	return pluginMetadata{}, fmt.Errorf("JAR has no plugin.yml or paper-plugin.yml")
 }
 
-func (server serverDirectory) inventory() ([]pluginFile, error) {
+func (server Server) inventory() ([]pluginFile, error) {
 	files, err := server.plugins()
 	if err != nil {
 		return nil, err
@@ -116,9 +117,10 @@ func withSourceDependencies(files []pluginFile, state packageState) []pluginFile
 	}
 	for i := range files {
 		entry := byJAR[files[i].baseJAR]
+		// Registries can declare requirements that do not appear in the JAR descriptor.
 		for _, required := range entry.Requires {
 			dependency, exists := state[state.sourceKey(required)]
-			name := required.key()
+			name := required.Key()
 			if exists {
 				name = dependency.Name
 			}

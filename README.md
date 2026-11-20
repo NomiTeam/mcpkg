@@ -5,14 +5,20 @@ downloads server JARs and builds JARs from Git repositories.
 
 ## Build
 
-Run `go build .` from the repository root with Go 1.23 or newer. The binary
+Run `go build ./cmd/mcpkg` from the repository root with Go 1.23 or newer. The binary
 is `./mcpkg` on Linux or macOS and `.\mcpkg.exe` on Windows.
 
 ## Manage plugins
 
 Run from the server directory, or put `-server <directory>` before a command.
-Include `-minecraft <version>` when installing from Modrinth or Hangar.
-Modrinth defaults to Paper. Choose another loader with `-loader`.
+Set the Minecraft version and loader in `mcpkg.yml` at the server root, or
+specify them per command with `-minecraft` and `-loader`. The flags override
+the file, and the default loader is Paper.
+
+```yaml
+minecraft: "26.3"
+loader: paper
+```
 
 ```sh
 mcpkg -minecraft 26.3 search ViaVersion
@@ -34,6 +40,7 @@ mcpkg remove ViaBackwards
 | PaperMC Hangar | `hangar:ViaVersion` or `hangar:ViaVersion@5.12.2` |
 | SpigotMC through Spiget | `spigot:34315` or `spigot:34315@344916` |
 | Local or built JAR | `file:./plugin.jar` |
+| Configured source | `custom-fishing` or `source:custom-fishing` |
 
 Quote GitHub asset patterns, and include one if the release contains multiple
 JARs. Spiget downloads are limited to free, hosted JARs where Spiget can provide
@@ -53,6 +60,34 @@ versions, preserving disabled status and skipping local files and versions pinne
 with `@`. Install a new local JAR to update a previous local installation.
 `remove` deletes only the managed JAR and its lock entry. Plugin data remains
 in place.
+
+## Add a plugin source
+
+1. Create a `sources.d/` directory at the server root.
+2. Copy [custom-fishing.yml](examples/server/sources.d/custom-fishing.yml) into it. The filename
+   supplies the package name. Custom-Fishing requires JDK 21.
+3. Run `mcpkg install custom-fishing` and then `mcpkg list`.
+
+A Git source uses `repository`, `ref` and a `build` block. Omit `ref` to
+track the remote default branch or use a full commit ID to pin it. Commands
+are argument lists. `windows-command` overrides `command` on Windows. The
+artifact path is relative to the checkout and may use a filename pattern
+that matches one JAR.
+
+`update` compares Git commits and recipes without building. `upgrade` builds
+the resolved commit, and `-dry-run upgrade` shows the planned build. The lock
+records the full commit and JAR checksum. Move a manually installed copy of
+the same plugin out of `plugins/` before installing it from a source. Keep
+source files you trust because Git sources execute the configured command.
+
+For a binary release, save a source file such as `sources.d/viaversion.yml`.
+The `asset` pattern and release tag in `ref` are optional.
+
+```yaml
+type: github-release
+repository: ViaVersion/ViaVersion
+asset: "ViaVersion-*.jar"
+```
 
 ## Download a JAR
 

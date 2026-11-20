@@ -1,7 +1,8 @@
-package main
+package manager
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/NomiTeam/mcpkg/internal/source"
 )
 
 type testTransport func(*http.Request) (*http.Response, error)
@@ -21,7 +24,7 @@ func (transport testTransport) RoundTrip(request *http.Request) (*http.Response,
 
 func TestManagedPluginLifecycle(t *testing.T) {
 	root := t.TempDir()
-	server := newServer(root)
+	server := NewServer(root)
 	if err := os.Mkdir(server.pluginsPath, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -71,57 +74,83 @@ func TestManagedPluginLifecycle(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Request: request, Body: io.NopCloser(bytes.NewReader(payload))}, nil
 	})}
 
-	runCLI := func(wantError string, args ...string) string {
+	runCommand := func(wantError string, args ...string) string {
 		t.Helper()
 		var output, stderr bytes.Buffer
-		err := run(append([]string{"-server", root, "-minecraft", "1.21.11"}, args...), &output, &stderr)
+		var err error
+		preview := args[0] == "-dry-run"
+		if preview {
+			args = args[1:]
+		}
+		switch args[0] {
+		case "enable", "disable":
+			_, err = server.SetEnabled(args[1], args[0] == "enable")
+		case "list":
+			var plugins []PluginStatus
+			plugins, err = server.List()
+			for _, plugin := range plugins {
+				fmt.Fprintln(&output, plugin.Source, plugin.Version, plugin.Available)
+			}
+		case "check":
+			var problems []string
+			problems, err = server.Check()
+			if len(problems) != 0 {
+				err = fmt.Errorf("check: %v", problems)
+			}
+		default:
+			argument := ""
+			if len(args) == 2 {
+				argument = args[1]
+			}
+			err = server.Manage(context.Background(), args[0], argument, source.Catalog{Loader: "paper", Minecraft: "1.21.11"}, preview, &output, &stderr)
+		}
 		if wantError == "" && err != nil || wantError != "" && (err == nil || !strings.Contains(err.Error(), wantError)) {
 			t.Fatalf("%v: got %v, want %q (%s)", args, err, wantError, output.String())
 		}
 		return output.String()
 	}
 
-	runCLI("", "install", "base")
-	runCLI("", "install", "example")
-	runCLI("requires modrinth:baseid", "remove", "base")
-	runCLI("Example requires Base", "disable", "mcpkg-modrinth-base.jar")
-	runCLI("", "disable", "mcpkg-modrinth-example.jar")
+	runCommand("", "install", "base")
+	runCommand("", "install", "example")
+	runCommand("requires modrinth:baseid", "remove", "base")
+	runCommand("Example requires Base", "disable", "mcpkg-modrinth-base.jar")
+	runCommand("", "disable", "mcpkg-modrinth-example.jar")
 
 	latest = "app2"
 	badDigest = true
-	runCLI("", "update")
-	if output := runCLI("", "list"); !strings.Contains(strings.Join(strings.Fields(output), " "), "modrinth:example 1 2") {
+	runCommand("", "update")
+	if output := runCommand("", "list"); !strings.Contains(strings.Join(strings.Fields(output), " "), "modrinth:example 1 2") {
 		t.Fatalf("list did not display the new version: %s", output)
 	}
-	runCLI("artifact checksum mismatch", "upgrade")
+	runCommand("artifact checksum mismatch", "upgrade")
 	disabled := filepath.Join(server.pluginsPath, "mcpkg-modrinth-example.jar.disabled")
 	data, err := os.ReadFile(disabled)
 	if err != nil || !bytes.Equal(data, jars["app1"]) {
 		t.Fatalf("failed upgrade changed the JAR: %v", err)
 	}
 	badDigest = false
-	runCLI("", "-dry-run", "upgrade")
+	runCommand("", "-dry-run", "upgrade")
 	metadata, err := inspectJAR(disabled)
 	if err != nil || metadata.Version != "1" {
 		t.Fatalf("preview changed the JAR: %v %v", metadata, err)
 	}
-	runCLI("", "upgrade", "example")
+	runCommand("", "upgrade", "example")
 	metadata, err = inspectJAR(disabled)
 	if err != nil || metadata.Version != "2" {
 		t.Fatalf("upgrade did not replace the disabled JAR: %v %v", metadata, err)
 	}
-	runCLI("", "disable", "mcpkg-modrinth-base.jar")
-	runCLI("Example requires Base", "enable", "mcpkg-modrinth-example.jar")
-	runCLI("", "enable", "mcpkg-modrinth-base.jar")
-	runCLI("", "enable", "mcpkg-modrinth-example.jar")
-	runCLI("", "check")
+	runCommand("", "disable", "mcpkg-modrinth-base.jar")
+	runCommand("Example requires Base", "enable", "mcpkg-modrinth-example.jar")
+	runCommand("", "enable", "mcpkg-modrinth-base.jar")
+	runCommand("", "enable", "mcpkg-modrinth-example.jar")
+	runCommand("", "check")
 
 	config := filepath.Join(server.pluginsPath, "Example")
 	if err := os.Mkdir(config, 0700); err != nil {
 		t.Fatal(err)
 	}
-	runCLI("", "remove", "example")
-	runCLI("", "remove", "base")
+	runCommand("", "remove", "example")
+	runCommand("", "remove", "base")
 	if _, err := os.Stat(config); err != nil {
 		t.Fatalf("remove deleted the plugin data directory: %v", err)
 	}
@@ -132,7 +161,7 @@ func TestManagedPluginLifecycle(t *testing.T) {
 }
 
 func TestCommitRestoresReplacedJAROnCollision(t *testing.T) {
-	server := newServer(t.TempDir())
+	server := NewServer(t.TempDir())
 	staging := filepath.Join(server.pluginsPath, ".staging")
 	if err := os.MkdirAll(staging, 0700); err != nil {
 		t.Fatal(err)

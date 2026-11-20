@@ -5,25 +5,21 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"text/tabwriter"
 	"time"
-)
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "mcpkg:", err)
-		os.Exit(1)
-	}
-}
+	"github.com/NomiTeam/mcpkg/internal/artifact"
+	"github.com/NomiTeam/mcpkg/internal/manager"
+	"github.com/NomiTeam/mcpkg/internal/source"
+)
 
 func run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("mcpkg", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	root := flags.String("server", ".", "directory containing plugins/")
 	gameVersion := flags.String("minecraft", "", "Minecraft version to filter search results")
-	loader := flags.String("loader", "paper", "plugin loader to filter search results")
+	loader := flags.String("loader", "", "plugin loader (defaults to mcpkg.yml or paper)")
 	preview := flags.Bool("dry-run", false, "preview an upgrade without changing installed plugins")
 	ref := flags.String("ref", "", "Git reference to build")
 	flags.Usage = func() {
@@ -41,7 +37,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 
-	server := newServer(*root)
+	server := manager.NewServer(*root)
+	config, err := server.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if *gameVersion == "" {
+		*gameVersion = config.Minecraft
+	}
+	if *loader == "" {
+		*loader = config.Loader
+	}
 	command := flags.Arg(0)
 	arguments := flags.Args()[1:]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -53,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if query == "" {
 			return fmt.Errorf("usage: mcpkg search <query>")
 		}
-		projects, err := searchModrinth(ctx, query, *loader, *gameVersion)
+		projects, err := source.SearchModrinth(ctx, query, *loader, *gameVersion)
 		if err != nil {
 			return err
 		}
@@ -67,27 +73,14 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if len(arguments) != 0 {
 			return fmt.Errorf("usage: mcpkg list")
 		}
-		plugins, err := server.plugins()
+		plugins, err := server.List()
 		if err != nil {
 			return err
-		}
-		state, err := server.loadState()
-		if err != nil {
-			return err
-		}
-		byFile := make(map[string]installedPlugin)
-		for _, entry := range state {
-			byFile[entry.JAR] = entry
 		}
 		table := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(table, "STATUS\tFILE\tSOURCE\tVERSION\tAVAILABLE")
 		for _, plugin := range plugins {
-			entry, managed := byFile[plugin.baseJAR]
-			id := "-"
-			if managed {
-				id = entry.Source.key()
-			}
-			fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", plugin.status(), plugin.filename, id, entry.Version, entry.Available)
+			fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\n", plugin.Status, plugin.File, plugin.Source, plugin.Version, plugin.Available)
 		}
 		return table.Flush()
 	case "install", "remove", "update", "upgrade":
@@ -99,24 +92,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if len(arguments) == 1 {
 			argument = arguments[0]
 		}
-		return server.manage(ctx, command, argument, catalog{Loader: *loader, Minecraft: *gameVersion}, *preview, stdout)
+		manageContext, stop := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer stop()
+		return server.Manage(manageContext, command, argument, source.Catalog{Loader: *loader, Minecraft: *gameVersion}, *preview, stdout, stderr)
 	case "check":
 		if len(arguments) != 0 {
 			return fmt.Errorf("usage: mcpkg check")
 		}
-		files, err := server.inventory()
+		problems, err := server.Check()
 		if err != nil {
 			return err
-		}
-		state, err := server.loadState()
-		if err != nil {
-			return err
-		}
-		problems := dependencyProblems(withSourceDependencies(files, state))
-		for _, file := range files {
-			if file.enabled && file.metadataError != nil {
-				problems = append(problems, fmt.Sprintf("%s: %v", file.filename, file.metadataError))
-			}
 		}
 		for _, problem := range problems {
 			fmt.Fprintln(stdout, problem)
@@ -131,22 +116,22 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return fmt.Errorf("usage: mcpkg [-minecraft version] download <paper|folia|spigot|buildtools|source:plugin> <output.jar>")
 		}
 		if strings.Contains(arguments[0], ":") {
-			src, err := parseSource(arguments[0])
+			src, err := source.Parse(arguments[0])
 			if err != nil {
 				return err
 			}
-			a, err := (catalog{Loader: *loader, Minecraft: *gameVersion}).resolve(ctx, src)
+			a, err := (source.Catalog{Loader: *loader, Minecraft: *gameVersion}).Resolve(ctx, src)
 			if err != nil {
 				return err
 			}
-			return publishJAR(arguments[1], func(path string) error {
-				_, err := downloadArtifact(ctx, path, a)
+			return artifact.Publish(arguments[1], func(path string) error {
+				_, err := artifact.Download(ctx, path, a.URL, a.Digest)
 				return err
 			})
 		}
 		buildContext, stop := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer stop()
-		return downloadServer(buildContext, arguments[0], *gameVersion, arguments[1], stdout, stderr)
+		return artifact.DownloadServer(buildContext, arguments[0], *gameVersion, arguments[1], stdout, stderr)
 	case "build":
 		if len(arguments) < 3 || (len(arguments) > 3 && (arguments[3] != "--" || len(arguments) == 4)) {
 			return fmt.Errorf("usage: mcpkg [-ref ref] build <repository> <artifact-path> <output.jar> [-- <command> ...]")
@@ -157,12 +142,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 		buildContext, stop := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer stop()
-		return repositoryBuild(buildContext, arguments[0], *ref, arguments[1], arguments[2], buildCommand, stdout, stderr)
+		return artifact.BuildRepository(buildContext, arguments[0], *ref, arguments[1], arguments[2], buildCommand, stdout, stderr)
 	case "enable", "disable":
 		if len(arguments) != 1 {
 			return fmt.Errorf("usage: mcpkg %s <jar filename>", command)
 		}
-		filename, err := server.setEnabled(arguments[0], command == "enable")
+		filename, err := server.SetEnabled(arguments[0], command == "enable")
 		if err != nil {
 			return err
 		}

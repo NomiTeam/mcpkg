@@ -1,4 +1,4 @@
-package main
+package artifact
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 const maxArtifactBytes = 256 << 20
 
-func writeArtifact(dst string, reader io.Reader, digest string) (string, error) {
+func Write(dst string, reader io.Reader, digest string) (string, error) {
 	file, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return "", err
@@ -40,11 +40,11 @@ func writeArtifact(dst string, reader io.Reader, digest string) (string, error) 
 	return sha256Sum, file.Close()
 }
 
-func downloadArtifact(ctx context.Context, dst string, a artifact) (string, error) {
-	response, err := request(ctx, a.URL)
+func Download(ctx context.Context, dst, url, digest string) (string, error) {
+	response, err := request(ctx, url)
 	if err != nil {
 		return "", err
 	}
 	defer response.Body.Close()
-	return writeArtifact(dst, response.Body, a.Digest)
+	return Write(dst, response.Body, digest)
 }

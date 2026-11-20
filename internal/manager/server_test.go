@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"archive/zip"
@@ -38,7 +38,7 @@ func TestSetEnabled(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := newServer(t.TempDir())
+			server := NewServer(t.TempDir())
 			if err := os.Mkdir(server.pluginsPath, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -48,9 +48,9 @@ func TestSetEnabled(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			filename, err := server.setEnabled("示例插件.jar", test.enable)
+			filename, err := server.SetEnabled("示例插件.jar", test.enable)
 			if err != nil || filename != test.target {
-				t.Fatalf("setEnabled returned %q, %v; want %q", filename, err, test.target)
+				t.Fatalf("SetEnabled returned %q, %v; want %q", filename, err, test.target)
 			}
 			plugins, err := server.plugins()
 			if err != nil || len(plugins) != 1 || plugins[0].enabled != test.enable {
@@ -65,7 +65,7 @@ func TestSetEnabled(t *testing.T) {
 }
 
 func TestSetEnabledPreservesConflictingFiles(t *testing.T) {
-	server := newServer(t.TempDir())
+	server := NewServer(t.TempDir())
 	if err := os.Mkdir(server.pluginsPath, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -76,10 +76,10 @@ func TestSetEnabledPreservesConflictingFiles(t *testing.T) {
 		}
 	}
 
-	if _, err := server.setEnabled("example.jar.disabled", true); err == nil {
+	if _, err := server.SetEnabled("example.jar.disabled", true); err == nil {
 		t.Fatal("enable succeeded even though the target already existed")
 	}
-	if _, err := server.setEnabled("example.jar", false); err == nil {
+	if _, err := server.SetEnabled("example.jar", false); err == nil {
 		t.Fatal("disable succeeded even though the target already existed")
 	}
 	for filename, want := range files {

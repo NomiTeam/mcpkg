@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"errors"
@@ -11,8 +11,18 @@ import (
 
 const disabledSuffix = ".disabled"
 
-type serverDirectory struct {
+type Server struct {
+	root        string
 	pluginsPath string
+}
+
+// PluginStatus combines the JAR on disk with its lock entry when managed.
+type PluginStatus struct {
+	Status    string
+	File      string
+	Source    string
+	Version   string
+	Available string
 }
 
 type pluginFile struct {
@@ -23,8 +33,56 @@ type pluginFile struct {
 	metadataError error
 }
 
-func newServer(root string) serverDirectory {
-	return serverDirectory{pluginsPath: filepath.Join(root, "plugins")}
+func NewServer(root string) Server {
+	return Server{root: root, pluginsPath: filepath.Join(root, "plugins")}
+}
+
+func (server Server) List() ([]PluginStatus, error) {
+	files, err := server.plugins()
+	if err != nil {
+		return nil, err
+	}
+	state, err := server.loadState()
+	if err != nil {
+		return nil, err
+	}
+
+	byFile := make(map[string]installedPlugin, len(state))
+	for _, entry := range state {
+		byFile[entry.JAR] = entry
+	}
+	statuses := make([]PluginStatus, 0, len(files))
+	for _, file := range files {
+		entry, managed := byFile[file.baseJAR]
+		id := "-"
+		if managed {
+			id = entry.Source.Key()
+		}
+		statuses = append(statuses, PluginStatus{
+			Status: file.status(), File: file.filename, Source: id,
+			Version: entry.Version, Available: entry.Available,
+		})
+	}
+	return statuses, nil
+}
+
+func (server Server) Check() ([]string, error) {
+	files, err := server.inventory()
+	if err != nil {
+		return nil, err
+	}
+	state, err := server.loadState()
+	if err != nil {
+		return nil, err
+	}
+
+	problems := dependencyProblems(withSourceDependencies(files, state))
+	for _, file := range files {
+		if file.enabled && file.metadataError != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", file.filename, file.metadataError))
+		}
+	}
+	return problems, nil
 }
 
 func (plugin pluginFile) status() string {
@@ -34,7 +92,7 @@ func (plugin pluginFile) status() string {
 	return "disabled"
 }
 
-func (server serverDirectory) plugins() ([]pluginFile, error) {
+func (server Server) plugins() ([]pluginFile, error) {
 	entries, err := os.ReadDir(server.pluginsPath)
 	if err != nil {
 		return nil, fmt.Errorf("read plugins directory: %w", err)
@@ -57,7 +115,7 @@ func (server serverDirectory) plugins() ([]pluginFile, error) {
 	return plugins, nil
 }
 
-func (server serverDirectory) setEnabled(filename string, enabled bool) (string, error) {
+func (server Server) SetEnabled(filename string, enabled bool) (string, error) {
 	unlock, err := server.lock()
 	if err != nil {
 		return "", err

@@ -1,11 +1,10 @@
-package main
+package artifact
 
 import (
 	"archive/zip"
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +12,7 @@ import (
 	"strings"
 )
 
-func publishJAR(destination string, write func(string) error) error {
+func Publish(destination string, write func(string) error) error {
 	if !strings.HasSuffix(strings.ToLower(destination), ".jar") {
 		return fmt.Errorf("output must have a .jar extension")
 	}
@@ -48,8 +47,8 @@ func copyJAR(sourcePath, destination string) error {
 	}
 	defer jar.Close()
 
-	return publishJAR(destination, func(staged string) error {
-		_, err := writeArtifact(staged, jar, "")
+	return Publish(destination, func(staged string) error {
+		_, err := Write(staged, jar, "")
 		return err
 	})
 }
@@ -68,7 +67,8 @@ func runBuildCommand(ctx context.Context, dir string, output, stderr io.Writer, 
 	return nil
 }
 
-func repositoryBuild(ctx context.Context, repository, ref, jar, destination string, command []string, output, stderr io.Writer) error {
+// BuildRepository clones into a temporary checkout and publishes one matching JAR.
+func BuildRepository(ctx context.Context, repository, ref, jar, destination string, command []string, output, stderr io.Writer) error {
 	if !filepath.IsLocal(jar) || !strings.HasSuffix(jar, ".jar") {
 		return fmt.Errorf("build artifact must be a relative JAR path inside the repository")
 	}
@@ -114,7 +114,12 @@ func repositoryBuild(ctx context.Context, repository, ref, jar, destination stri
 	if err := runBuildCommand(ctx, checkout, output, stderr, command...); err != nil {
 		return err
 	}
-	resolved, err := filepath.EvalSymlinks(filepath.Join(checkout, jar))
+	artifactPath, err := buildArtifactPath(checkout, jar)
+	if err != nil {
+		return err
+	}
+	// A generated symlink must still resolve inside the checkout.
+	resolved, err := filepath.EvalSymlinks(artifactPath)
 	if err != nil {
 		return fmt.Errorf("locate built JAR %s: %w", jar, err)
 	}
@@ -127,6 +132,36 @@ func repositoryBuild(ctx context.Context, repository, ref, jar, destination stri
 		return fmt.Errorf("artifact %s points outside the repository", jar)
 	}
 	return copyJAR(resolved, destination)
+}
+
+func buildArtifactPath(checkout, pattern string) (string, error) {
+	path := filepath.Join(checkout, pattern)
+	if file, err := os.Stat(path); err == nil && file.Mode().IsRegular() {
+		return path, nil
+	}
+	directory, filename := filepath.Split(path)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return "", fmt.Errorf("locate built JAR %s: %w", pattern, err)
+	}
+	match := ""
+	for _, entry := range entries {
+		matched, err := filepath.Match(filename, entry.Name())
+		if err != nil {
+			return "", fmt.Errorf("invalid artifact pattern %q: %w", pattern, err)
+		}
+		if !matched || entry.IsDir() {
+			continue
+		}
+		if match != "" {
+			return "", fmt.Errorf("more than one built JAR matches %q", pattern)
+		}
+		match = entry.Name()
+	}
+	if match == "" {
+		return "", fmt.Errorf("no built JAR matches %q", pattern)
+	}
+	return filepath.Join(directory, match), nil
 }
 
 func defaultBuildCommand(dir string) ([]string, error) {
@@ -163,75 +198,4 @@ func defaultBuildCommand(dir string) ([]string, error) {
 		}
 	}
 	return nil, fmt.Errorf("no Gradle or Maven build detected; supply -- <build command> [args]")
-}
-
-const spigotBuildTools = "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
-
-func downloadServer(ctx context.Context, project, version, destination string, output, stderr io.Writer) error {
-	if project == "buildtools" {
-		return publishJAR(destination, func(path string) error {
-			_, err := downloadArtifact(ctx, path, artifact{URL: spigotBuildTools})
-			return err
-		})
-	}
-	if !sourcePart.MatchString(version) || version == "." || version == ".." {
-		return fmt.Errorf("specify the Minecraft version with -minecraft")
-	}
-	if project == "spigot" {
-		dir, err := os.MkdirTemp("", "mcpkg-spigot-*")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(dir)
-		if _, err := downloadArtifact(ctx, filepath.Join(dir, "BuildTools.jar"), artifact{URL: spigotBuildTools}); err != nil {
-			return err
-		}
-		outputDir := filepath.Join(dir, "output")
-		if err := os.Mkdir(outputDir, 0700); err != nil {
-			return err
-		}
-		if err := runBuildCommand(ctx, dir, output, stderr, "java", "-jar", "BuildTools.jar", "--nogui", "--rev", version, "--compile", "SPIGOT", "--output-dir", outputDir); err != nil {
-			return err
-		}
-		jars, err := filepath.Glob(filepath.Join(outputDir, "spigot-*.jar"))
-		if err != nil {
-			return err
-		}
-		if len(jars) != 1 {
-			return fmt.Errorf("BuildTools produced %d Spigot JARs; expected one", len(jars))
-		}
-		return copyJAR(jars[0], destination)
-	}
-	if project != "paper" && project != "folia" {
-		return fmt.Errorf("unknown server distribution %q", project)
-	}
-
-	var builds []struct {
-		ID        int
-		Channel   string
-		Downloads map[string]struct {
-			URL       string
-			Checksums map[string]string
-		}
-	}
-	endpoint := "https://fill.papermc.io/v3/projects/" + project + "/versions/" + url.PathEscape(version) + "/builds"
-	if err := getJSON(ctx, endpoint, &builds); err != nil {
-		return err
-	}
-	var selected artifact
-	var buildID int
-	for _, build := range builds {
-		file := build.Downloads["server:default"]
-		if build.Channel == "STABLE" && build.ID > buildID && file.URL != "" && file.Checksums["sha256"] != "" {
-			selected = artifact{URL: file.URL, Digest: "sha256:" + file.Checksums["sha256"]}
-			buildID = build.ID
-		}
-	}
-	if buildID == 0 {
-		return fmt.Errorf("no stable %s build for Minecraft %s", project, version)
-	}
-	return publishJAR(destination, func(path string) error {
-		_, err := downloadArtifact(ctx, path, selected)
-		return err
-	})
 }
