@@ -11,8 +11,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/NomiTeam/mcpkg/internal/artifact"
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/artifact"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 type jarChange struct {

@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 type installedPlugin struct {

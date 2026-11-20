@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/NomiTeam/mcpkg/internal/artifact"
+	"github.com/NomiTeam/mcpkg/src/internal/artifact"
 )
 
 func (c Catalog) hangar(ctx context.Context, s Reference) (Artifact, error) {

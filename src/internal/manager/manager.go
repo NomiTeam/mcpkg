@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 // Manage serializes package changes and dispatches the requested operation.

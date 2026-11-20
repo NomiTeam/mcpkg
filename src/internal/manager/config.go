@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 	"go.yaml.in/yaml/v3"
 )
 

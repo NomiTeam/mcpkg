@@ -1,0 +1,7 @@
+type: git
+repository: https://github.com/owner/example-plugin.git
+ref: main
+build:
+  command: [sh, ./gradlew, build]
+  windows-command: [cmd.exe, /d, /c, gradlew.bat, build]
+  artifact: "build/libs/example-plugin-*.jar"

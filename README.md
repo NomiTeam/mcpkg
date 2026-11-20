@@ -5,7 +5,7 @@ downloads server JARs and builds JARs from Git repositories.
 
 ## Build
 
-Run `go build ./cmd/mcpkg` from the repository root with Go 1.23 or newer. The binary
+Run `go build ./src/cmd/mcpkg` from the repository root with Go 1.23 or newer. The binary
 is `./mcpkg` on Linux or macOS and `.\mcpkg.exe` on Windows.
 
 ## Manage plugins
@@ -16,13 +16,13 @@ specify them per command with `-minecraft` and `-loader`. The flags override
 the file, and the default loader is Paper.
 
 ```yaml
-minecraft: "26.3"
+minecraft: "1.21.11"
 loader: paper
 ```
 
 ```sh
-mcpkg -minecraft 26.3 search ViaVersion
-mcpkg -minecraft 26.3 install viabackwards
+mcpkg -minecraft 1.21.11 search ViaVersion
+mcpkg -minecraft 1.21.11 install viabackwards
 mcpkg list
 mcpkg update
 mcpkg -dry-run upgrade
@@ -40,7 +40,7 @@ mcpkg remove ViaBackwards
 | PaperMC Hangar | `hangar:ViaVersion` or `hangar:ViaVersion@5.12.2` |
 | SpigotMC through Spiget | `spigot:34315` or `spigot:34315@344916` |
 | Local or built JAR | `file:./plugin.jar` |
-| Configured source | `custom-fishing` or `source:custom-fishing` |
+| Configured source | `example-plugin` or `source:example-plugin` |
 
 Quote GitHub asset patterns, and include one if the release contains multiple
 JARs. Spiget downloads are limited to free, hosted JARs where Spiget can provide
@@ -64,9 +64,10 @@ in place.
 ## Add a plugin source
 
 1. Create a `sources.d/` directory at the server root.
-2. Copy [custom-fishing.yml](examples/server/sources.d/custom-fishing.yml) into it. The filename
-   supplies the package name. Custom-Fishing requires JDK 21.
-3. Run `mcpkg install custom-fishing` and then `mcpkg list`.
+2. Copy [example-plugin.yml](examples/server/sources.d/example-plugin.yml) into it. Set
+   the repository, build command and artifact path for your plugin. The filename
+   supplies the package name.
+3. Run `mcpkg install example-plugin` and then `mcpkg list`.
 
 A Git source uses `repository`, `ref` and a `build` block. Omit `ref` to
 track the remote default branch or use a full commit ID to pin it. Commands
@@ -92,8 +93,8 @@ asset: "ViaVersion-*.jar"
 ## Download a JAR
 
 ```sh
-mcpkg -minecraft 26.3 download paper paper.jar
-mcpkg -minecraft 26.3 download folia folia.jar
+mcpkg -minecraft 1.21.11 download paper paper.jar
+mcpkg -minecraft 1.21.11 download folia folia.jar
 mcpkg -minecraft 1.21.11 download spigot spigot.jar
 mcpkg download github:ViaVersion/ViaVersion ViaVersion.jar
 ```

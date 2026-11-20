@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NomiTeam/mcpkg/internal/artifact"
+	"github.com/NomiTeam/mcpkg/src/internal/artifact"
 )
 
 type modrinthProject struct {

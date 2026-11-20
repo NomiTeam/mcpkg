@@ -9,9 +9,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/NomiTeam/mcpkg/internal/artifact"
-	"github.com/NomiTeam/mcpkg/internal/manager"
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/artifact"
+	"github.com/NomiTeam/mcpkg/src/internal/manager"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 func run(args []string, stdout, stderr io.Writer) error {

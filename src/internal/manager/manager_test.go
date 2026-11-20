@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 type testTransport func(*http.Request) (*http.Response, error)

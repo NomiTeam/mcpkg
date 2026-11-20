@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NomiTeam/mcpkg/internal/source"
+	"github.com/NomiTeam/mcpkg/src/internal/source"
 )
 
 func TestConfiguredGitSourceUpgrade(t *testing.T) {
@@ -47,14 +47,14 @@ func TestConfiguredGitSourceUpgrade(t *testing.T) {
 
 	git("init", "-qb", "main")
 	commit("1")
-	writeFile(filepath.Join(server.root, "mcpkg.yml"), []byte("loader: folia\nminecraft: \"26.3\"\n"))
+	writeFile(filepath.Join(server.root, "mcpkg.yml"), []byte("loader: spigot\nminecraft: \"1.21.11\"\n"))
 	writeFile(filepath.Join(sourceDirectory, "example.yml"), []byte(
 		"type: git\nrepository: repository\nref: main\nbuild:\n"+
 			"  command: [git, log, -1, '--format=format:%h configured-build-ran']\n"+
 			"  artifact: 'plugin-*.jar'\n"))
 
 	config, err := server.LoadConfig()
-	if err != nil || config.Loader != "folia" || config.Minecraft != "26.3" {
+	if err != nil || config.Loader != "spigot" || config.Minecraft != "1.21.11" {
 		t.Fatalf("load config: %+v, %v", config, err)
 	}
 	target := source.Catalog{Minecraft: config.Minecraft, Loader: config.Loader}

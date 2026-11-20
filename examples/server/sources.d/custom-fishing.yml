@@ -1,7 +1,0 @@
-type: git
-repository: https://github.com/NomiTeam/Custom-Fishing.git
-ref: main
-build:
-  command: [sh, ./gradlew, --no-daemon, ":core:shadowJar"]
-  windows-command: [cmd.exe, /d, /c, gradlew.bat, --no-daemon, ":core:shadowJar"]
-  artifact: "target/CustomFishing-*.jar"

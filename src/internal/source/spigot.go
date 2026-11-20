@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/NomiTeam/mcpkg/internal/artifact"
+	"github.com/NomiTeam/mcpkg/src/internal/artifact"
 )
 
 func spigotResource(ctx context.Context, s Reference) (Artifact, error) {
