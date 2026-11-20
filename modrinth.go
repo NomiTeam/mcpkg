@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 )
 
@@ -26,26 +24,11 @@ func searchModrinth(ctx context.Context, query, loader, gameVersion string) ([]m
 	}
 	parameters := url.Values{"query": {query}, "facets": {string(encodedFacets)}}
 	endpoint := "https://api.modrinth.com/v2/search?" + parameters.Encode()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build Modrinth search request: %w", err)
-	}
-	request.Header.Set("User-Agent", "NomiTeam/mcpkg (https://github.com/NomiTeam/mcpkg)")
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("search Modrinth: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("search Modrinth: HTTP %s", response.Status)
-	}
-
 	var result struct {
 		Hits []modrinthProject `json:"hits"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 4<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("read Modrinth search results: %w", err)
+	if err := getJSON(ctx, endpoint, &result); err != nil {
+		return nil, fmt.Errorf("search Modrinth: %w", err)
 	}
 	return result.Hits, nil
 }

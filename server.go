@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -15,9 +16,11 @@ type serverDirectory struct {
 }
 
 type pluginFile struct {
-	filename string
-	baseJAR  string
-	enabled  bool
+	filename      string
+	baseJAR       string
+	enabled       bool
+	metadata      pluginMetadata
+	metadataError error
 }
 
 func newServer(root string) serverDirectory {
@@ -55,15 +58,30 @@ func (server serverDirectory) plugins() ([]pluginFile, error) {
 }
 
 func (server serverDirectory) setEnabled(filename string, enabled bool) (string, error) {
-	lockPath := filepath.Join(server.pluginsPath, ".mcpkg-lock")
-	if err := os.Mkdir(lockPath, 0700); err != nil {
-		return "", fmt.Errorf("lock plugins directory: %w", err)
-	}
-	defer os.Remove(lockPath)
-
-	plugins, err := server.plugins()
+	unlock, err := server.lock()
 	if err != nil {
 		return "", err
+	}
+	defer unlock()
+
+	plugins, err := server.inventory()
+	if err != nil {
+		return "", err
+	}
+	state, err := server.loadState()
+	if err != nil {
+		return "", err
+	}
+
+	// A managed plugin can also be selected by its source ID or declared name.
+	if !slices.ContainsFunc(plugins, func(plugin pluginFile) bool {
+		return filename == plugin.filename || filename == plugin.baseJAR
+	}) {
+		key, err := state.lookup(filename)
+		if err != nil {
+			return "", err
+		}
+		filename = state[key].JAR
 	}
 
 	var match *pluginFile
@@ -82,6 +100,9 @@ func (server serverDirectory) setEnabled(filename string, enabled bool) (string,
 	if match.enabled == enabled {
 		return match.filename, nil
 	}
+	if match.metadataError != nil {
+		return "", fmt.Errorf("inspect %s: %w", match.filename, match.metadataError)
+	}
 
 	target := match.baseJAR
 	if !enabled {
@@ -94,6 +115,16 @@ func (server serverDirectory) setEnabled(filename string, enabled bool) (string,
 			return "", fmt.Errorf("check target %q: %w", targetPath, err)
 		}
 		return "", fmt.Errorf("target %q already exists", targetPath)
+	}
+	plugins = withSourceDependencies(plugins, state)
+	proposed := slices.Clone(plugins)
+	for i := range proposed {
+		if proposed[i].filename == match.filename {
+			proposed[i].enabled = enabled
+		}
+	}
+	if err := checkDependencies(plugins, proposed, map[string]bool{match.metadata.Name: true}); err != nil {
+		return "", err
 	}
 	if err := os.Rename(sourcePath, targetPath); err != nil {
 		return "", fmt.Errorf("rename %q to %q: %w", match.filename, target, err)

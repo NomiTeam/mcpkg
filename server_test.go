@@ -1,10 +1,29 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func pluginJAR(t *testing.T, descriptor, yaml string) []byte {
+	t.Helper()
+	var jar bytes.Buffer
+	writer := zip.NewWriter(&jar)
+	file, err := writer.Create(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte(yaml)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return jar.Bytes()
+}
 
 func TestSetEnabled(t *testing.T) {
 	tests := []struct {
@@ -24,7 +43,8 @@ func TestSetEnabled(t *testing.T) {
 				t.Fatal(err)
 			}
 			sourcePath := filepath.Join(server.pluginsPath, test.source)
-			if err := os.WriteFile(sourcePath, []byte("sample JAR contents"), 0600); err != nil {
+			original := pluginJAR(t, "plugin.yml", "name: Example\nversion: 1\n")
+			if err := os.WriteFile(sourcePath, original, 0600); err != nil {
 				t.Fatal(err)
 			}
 
@@ -37,7 +57,7 @@ func TestSetEnabled(t *testing.T) {
 				t.Fatalf("plugins returned %v, %v", plugins, err)
 			}
 			contents, err := os.ReadFile(filepath.Join(server.pluginsPath, filename))
-			if err != nil || string(contents) != "sample JAR contents" {
+			if err != nil || !bytes.Equal(contents, original) {
 				t.Fatalf("renamed file contents = %q, %v", contents, err)
 			}
 		})
