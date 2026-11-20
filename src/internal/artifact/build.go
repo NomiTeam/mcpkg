@@ -12,10 +12,12 @@ import (
 	"strings"
 )
 
+// Publish validates a staged JAR before exposing it at the requested path.
 func Publish(destination string, write func(string) error) error {
 	if !strings.HasSuffix(strings.ToLower(destination), ".jar") {
 		return fmt.Errorf("output must have a .jar extension")
 	}
+	// Stage beside the destination so the final hard link stays on one filesystem.
 	stage, err := os.MkdirTemp(filepath.Dir(destination), ".mcpkg-output-*")
 	if err != nil {
 		return err
@@ -136,6 +138,7 @@ func BuildRepository(ctx context.Context, repository, ref, jar, destination stri
 
 func buildArtifactPath(checkout, pattern string) (string, error) {
 	path := filepath.Join(checkout, pattern)
+	// Prefer an existing literal filename even if it contains glob characters.
 	if file, err := os.Stat(path); err == nil && file.Mode().IsRegular() {
 		return path, nil
 	}
@@ -165,6 +168,7 @@ func buildArtifactPath(checkout, pattern string) (string, error) {
 }
 
 func defaultBuildCommand(dir string) ([]string, error) {
+	// Prefer wrappers because they select the tool version recorded by the repository.
 	for _, tool := range []struct {
 		wrapper, batch string
 		args           []string

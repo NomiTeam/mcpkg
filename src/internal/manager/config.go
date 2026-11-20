@@ -40,6 +40,7 @@ func readConfig(filename string, target any) error {
 	defer file.Close()
 
 	decoder := yaml.NewDecoder(io.LimitReader(file, 1<<20))
+	// Reject misspelled keys so a recipe cannot silently use unintended defaults.
 	decoder.KnownFields(true)
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("read %s: %w", filename, err)
@@ -51,6 +52,7 @@ func readConfig(filename string, target any) error {
 	return nil
 }
 
+// LoadConfig reads server defaults and permits command-line-only setups.
 func (server Server) LoadConfig() (Config, error) {
 	var config Config
 	err := readConfig(filepath.Join(server.root, "mcpkg.yml"), &config)

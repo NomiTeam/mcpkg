@@ -25,6 +25,7 @@ func DownloadServer(ctx context.Context, project, version, destination string, o
 		return fmt.Errorf("specify the Minecraft version with -minecraft")
 	}
 	if project == "spigot" {
+		// Spigot distributes BuildTools to compile the server locally.
 		dir, err := os.MkdirTemp("", "mcpkg-spigot-*")
 		if err != nil {
 			return err
@@ -67,6 +68,7 @@ func DownloadServer(ctx context.Context, project, version, destination string, o
 	}
 	var downloadURL, digest string
 	var buildID int
+	// Select the highest stable build ID without relying on API response order.
 	for _, build := range builds {
 		file := build.Downloads["server:default"]
 		if build.Channel == "STABLE" && build.ID > buildID && file.URL != "" && file.Checksums["sha256"] != "" {

@@ -167,6 +167,7 @@ func (p *packagePlan) findInstalled(entry installedPlugin) (pluginFile, error) {
 	if !strings.EqualFold(file.metadata.Name, entry.Name) {
 		return pluginFile{}, fmt.Errorf("installed file %s no longer declares %s", file.filename, entry.Name)
 	}
+	// Check for manual edits before replacing or deleting a managed JAR.
 	reader, err := os.Open(filepath.Join(p.server.pluginsPath, file.filename))
 	if err != nil {
 		return pluginFile{}, err
@@ -199,6 +200,7 @@ func (p *packagePlan) resolve(ctx context.Context, target source.Catalog, src so
 		return fmt.Errorf("resolve %s: %w", key, err)
 	}
 	if a.ProjectID != "" {
+		// Match registry IDs to packages that were originally installed by slug.
 		key = p.state.sourceKey(source.Reference{Provider: src.Provider, Project: a.ProjectID})
 		if canonical, found := p.state[key]; found {
 			previous, exists = canonical, true
@@ -220,6 +222,7 @@ func (p *packagePlan) resolve(ctx context.Context, target source.Catalog, src so
 		if previous.ArtifactID != a.ID && previous.Source.Selector != "" {
 			return fmt.Errorf("%s requires version %s but %s is pinned", key, a.Version, previous.Version)
 		}
+		// Keep the user's version selection when resolving a dependency.
 		src = previous.Source
 	}
 	if exists && previous.ArtifactID == a.ID && previous.RecipeHash == a.RecipeHash && previous.Target == target && previous.Source == src {
@@ -318,5 +321,6 @@ func (p *packagePlan) commit() (err error) {
 			}
 		}
 	}
+	// Save the new lock state after every staged JAR has reached its destination.
 	return p.server.saveState(p.state)
 }

@@ -13,6 +13,7 @@ import (
 
 const maxArtifactBytes = 256 << 20
 
+// Write creates a staged file and verifies any digest published by the source.
 func Write(dst string, reader io.Reader, digest string) (string, error) {
 	file, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
@@ -20,6 +21,7 @@ func Write(dst string, reader io.Reader, digest string) (string, error) {
 	}
 	defer file.Close()
 
+	// Compute both supported digests in one pass. The lock always stores SHA-256.
 	sha256Hash := sha256.New()
 	sha512Hash := sha512.New()
 	n, err := io.Copy(io.MultiWriter(file, sha256Hash, sha512Hash), io.LimitReader(reader, maxArtifactBytes+1))

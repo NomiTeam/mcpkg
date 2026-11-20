@@ -26,15 +26,16 @@ func pluginJAR(t *testing.T, descriptor, yaml string) []byte {
 }
 
 func TestSetEnabled(t *testing.T) {
+	// Keep a non-ASCII filename to exercise renames on different filesystems.
 	tests := []struct {
 		name   string
 		source string
 		target string
 		enable bool
 	}{
-		{"disable", "示例插件.jar", "示例插件.jar.disabled", false},
-		{"enable", "示例插件.jar.disabled", "示例插件.jar", true},
-		{"enable legacy filename", "示例插件.jar.off", "示例插件.jar", true},
+		{"disable", "Caf\u00e9.jar", "Caf\u00e9.jar.disabled", false},
+		{"enable", "Caf\u00e9.jar.disabled", "Caf\u00e9.jar", true},
+		{"enable legacy filename", "Caf\u00e9.jar.off", "Caf\u00e9.jar", true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -48,7 +49,7 @@ func TestSetEnabled(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			filename, err := server.SetEnabled("示例插件.jar", test.enable)
+			filename, err := server.SetEnabled("Caf\u00e9.jar", test.enable)
 			if err != nil || filename != test.target {
 				t.Fatalf("SetEnabled returned %q, %v; want %q", filename, err, test.target)
 			}

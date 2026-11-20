@@ -30,6 +30,7 @@ func spigotResource(ctx context.Context, s Reference) (Artifact, error) {
 	if version.ID <= 0 {
 		return Artifact{}, fmt.Errorf("invalid Spigot version for resource %s", s.Project)
 	}
+	// The latest endpoint can use Spiget's CDN. Pinned versions use their own URL.
 	downloadURL := endpoint + "/download"
 	if s.Selector != "" {
 		downloadURL = fmt.Sprintf("%s/versions/%d/download", endpoint, version.ID)

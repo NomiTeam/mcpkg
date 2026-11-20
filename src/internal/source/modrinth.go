@@ -18,6 +18,7 @@ type modrinthProject struct {
 	Description string `json:"description"`
 }
 
+// SearchModrinth filters plugins by loader and, if specified, game version.
 func SearchModrinth(ctx context.Context, query, loader, gameVersion string) ([]modrinthProject, error) {
 	facets := [][]string{{"project_type:plugin"}, {"categories:" + loader}}
 	if gameVersion != "" {
@@ -70,10 +71,12 @@ func (c Catalog) modrinth(ctx context.Context, s Reference) (Artifact, error) {
 	}
 	sort.SliceStable(versions, func(i, j int) bool { return versions[i].Published.After(versions[j].Published) })
 	for _, v := range versions {
+		// Default to stable releases. Explicit selectors may pick a prerelease.
 		if s.Selector == "" && v.Type != "release" || s.Selector != "" && s.Selector != v.ID && s.Selector != v.Number {
 			continue
 		}
 		var a Artifact
+		// Prefer the primary JAR when the registry marks it.
 		for _, f := range v.Files {
 			if !strings.HasSuffix(f.Filename, ".jar") || f.Hashes["sha512"] == "" {
 				continue

@@ -11,6 +11,7 @@ import (
 
 const disabledSuffix = ".disabled"
 
+// Server owns the plugin directory and package configuration for one Minecraft server.
 type Server struct {
 	root        string
 	pluginsPath string
@@ -37,6 +38,7 @@ func NewServer(root string) Server {
 	return Server{root: root, pluginsPath: filepath.Join(root, "plugins")}
 }
 
+// List shows both managed packages and JARs installed outside mcpkg.
 func (server Server) List() ([]PluginStatus, error) {
 	files, err := server.plugins()
 	if err != nil {
@@ -106,6 +108,7 @@ func (server Server) plugins() ([]pluginFile, error) {
 		filename := entry.Name()
 		base, disabled := strings.CutSuffix(filename, disabledSuffix)
 		if !disabled {
+			// Older server directories may already use .off for disabled plugins.
 			base, disabled = strings.CutSuffix(filename, ".off")
 		}
 		if strings.HasSuffix(base, ".jar") {
@@ -115,6 +118,7 @@ func (server Server) plugins() ([]pluginFile, error) {
 	return plugins, nil
 }
 
+// SetEnabled validates the resulting inventory before changing the JAR suffix.
 func (server Server) SetEnabled(filename string, enabled bool) (string, error) {
 	unlock, err := server.lock()
 	if err != nil {
